@@ -72,10 +72,11 @@ mlflow.set_tracking_uri(f"https://{dags_username}:{dags_token}@dagshub.com/YOUR_
  
 
 class DataPreprocessor:
+
+	# a class variable
     learning_rate=0.1
 
     def __init__(self, dataset):
-        
         self.dataset=dataset.copy() # ignore last column
         self.target=dataset.iloc[:,-1] # only last col
         self.X_train=''
@@ -83,12 +84,9 @@ class DataPreprocessor:
         self.y_train=''
         self.y_test=''
 
-
     def data_preprocess(self):
-        
         # check duplicates
         if(self.dataset.duplicated().sum()>0):
-            
             # remove duplicates
             self.dataset.drop_duplicates()
            
@@ -102,7 +100,6 @@ class DataPreprocessor:
                 if f'{idx}' in lst_impute:
                     idx_mean= self.dataset[idx].mean()
                     self.dataset[idx].fillna(idx_mean, axis=0, inplace=True)
-                    
                 else:
                     self.dataset = self.dataset.dropna(subset=[idx])
 
@@ -115,23 +112,21 @@ class DataPreprocessor:
             self.dataset.drop('ID', axis=1, inplace=True)
 
         if 'Date' in self.dataset.columns:
-            self.dataset['Date'] = pd.to_datetime(self.dataset['Date'], errors='coerce')
-            self.dataset = self.dataset.dropna(subset=['Date'])
-            self.target = self.target.loc[self.dataset.index]
-            self.dataset['Year'] = self.dataset['Date'].dt.year
-            self.dataset['Month'] = self.dataset['Date'].dt.month
-            self.dataset['Day'] = self.dataset['Date'].dt.day
-            self.dataset = self.dataset.drop('Date', axis=1)
+            self.dataset['Date']   = pd.to_datetime(self.dataset['Date'], errors='coerce')
+            self.dataset           = self.dataset.dropna(subset=['Date'])
+            self.target            = self.target.loc[self.dataset.index]
+            self.dataset['Year']   = self.dataset['Date'].dt.year
+            self.dataset['Month']  = self.dataset['Date'].dt.month
+            self.dataset['Day']    = self.dataset['Date'].dt.day
+            self.dataset           = self.dataset.drop('Date', axis=1)
         
         if 'EstimatedSalary' in self.dataset.columns:
-        
-            Q1=self.dataset["EstimatedSalary"].quantile(q = 0.25)
-            Q3=self.dataset["EstimatedSalary"].quantile(q = 0.75)
-        
-            IQR=Q3-Q1
-            lower_bound= Q1- (1.5 * IQR)
-            upper_bound= Q3+ (1.5 * IQR)
-            outliers= self.dataset[(self.dataset.EstimatedSalary < lower_bound) | (self.dataset.EstimatedSalary>upper_bound)]
+            Q1           = self.dataset["EstimatedSalary"].quantile(q = 0.25)
+            Q3           = self.dataset["EstimatedSalary"].quantile(q = 0.75)
+			IQR          = Q3-Q1
+		    lower_bound  = Q1- (1.5 * IQR)
+            upper_bound  = Q3+ (1.5 * IQR)
+            outliers     = self.dataset[(self.dataset.EstimatedSalary < lower_bound) | (self.dataset.EstimatedSalary>upper_bound)]
         
             if(len(outliers)>0):
                 self.dataset.drop(outliers.index, axis=0, inplace=True)
@@ -141,14 +136,12 @@ class DataPreprocessor:
    
     def encoded_data(self):
         dataset=self.data_preprocess()
-       
-        #Dynamically encode existing categorical columns 
-        oh = OneHotEncoder(sparse_output=False)
-        ct = ColumnTransformer(transformers=[('ohe', oh, ['Gender', 'Country'])], 
+        oh       = OneHotEncoder(sparse_output=False)
+        ct       = ColumnTransformer(transformers=[('ohe', oh, ['Gender', 'Country'])], 
                               remainder='passthrough')
-        dataset = ct.fit_transform(dataset)
-
+        dataset  = ct.fit_transform(dataset)
         column_names = []
+		
         for each_col in ct.get_feature_names_out():
             column_names.append(each_col.split("_")[-1])
         self.dataset = pd.DataFrame(dataset, columns=column_names)
@@ -158,21 +151,21 @@ class DataPreprocessor:
     def train_test_data_split(self):
         self.encoded_data()
         # train test split
-        X=self.dataset[["Feature_1", "Feature_2"]]
-        y=self.dataset["Target"]
+        X      = self.dataset[["Feature_1", "Feature_2"]]
+        y      = self.dataset["Target"]
         X_train,X_test,y_train,y_test=train_test_split(X,y,test_size=0.2,random_state=45)
         
-        self.X_train=X_train
-        self.X_test=X_test
-        self.y_train=y_train
-        self.y_test=y_test
+        self.X_train  = X_train
+        self.X_test   = X_test
+        self.y_train  = y_train
+        self.y_test   = y_test
         print('before smote {}'.format(self.y_train.value_counts()))
         
         return 'train_test_split'
    
 
     def smote(self):
-        # Apply SMOTETomek to balance training data
+        # apply SMOTETomek (or) SOMTE from Pipeline to balance training data
         smote_tomek= SMOTETomek(random_state=45)
         X_train_resampled, y_train_resampled=smote_tomek.fit_resample(self.X_train,self.y_train)
 
@@ -184,39 +177,36 @@ class DataPreprocessor:
         X_train_resampled, y_train_resampled=self.smote()
 
         # scaling
-        sc=StandardScaler()
-        self.X_train=sc.fit_transform(X_train_resampled)
-        self.X_test=sc.transform(self.X_test)
-        self.y_train=y_train_resampled
+        sc           = StandardScaler()
+        self.X_train = sc.fit_transform(X_train_resampled)
+        self.X_test  = sc.transform(self.X_test)
+        self.y_train = y_train_resampled
         
         return 'split_with_smote_scale'
     
     def split_with_pca(self):
         self.train_test_data_split()
-        pca_data=PCA(n_components=2)
-        self.X_train= pca_data.fit_transform(self.X_train) 
-        self.X_test=pca_data.transform(self.X_test)
+        pca_data      = PCA(n_components=2)
+        self.X_train  = pca_data.fit_transform(self.X_train) 
+        self.X_test   = pca_data.transform(self.X_test)
         return 'split_with_pca'
     
  
 class PurchasePredict(DataPreprocessor):
-   
     def __init__(self, dataset):
         super().__init__(dataset)
         
-
     def logistic_regression(self):
         
         # data with scale
         self.split_with_scale()
         
-       
         # logistic regression classifier
-        lor_params={'max_iter':500,'penalty':'l2','C':0.25}
-        lor_model=LogisticRegression(
-            max_iter=lor_params['max_iter'], 
-            penalty=lor_params['penalty'],
-            C=lor_params['C']
+        lor_params   = {'max_iter':500,'penalty':'l2','C':0.25}
+        lor_model    = LogisticRegression(
+			max_iter = lor_params['max_iter'], 
+            penalty  = lor_params['penalty'],
+            C        = lor_params['C']
            
         )
 
@@ -274,10 +264,10 @@ class PurchasePredict(DataPreprocessor):
             'criterion':'gini'
         }
         dt_model=DecisionTreeClassifier(
-            criterion=dt_params['criterion'],
-            max_depth=dt_params['max_depth'],
-            min_samples_split=dt_params['min_samples_split']
-            )
+            criterion         = dt_params['criterion'],
+            max_depth         = dt_params['max_depth'],
+            min_samples_split = dt_params['min_samples_split']
+        )
         
         # train model
         dt_model.fit(self.X_train,self.y_train)
@@ -291,9 +281,9 @@ class PurchasePredict(DataPreprocessor):
         
         rf_params={'n_estimators':100, 'criterion':"gini" , 'max_depth':3}
         rf_model=RandomForestClassifier(
-            n_estimators=rf_params['n_estimators'], 
-            criterion=rf_params['criterion'], 
-            max_depth=rf_params['max_depth']
+            n_estimators  = rf_params['n_estimators'], 
+            criterion     = rf_params['criterion'], 
+            max_depth     = rf_params['max_depth']
         )
         rf_model.fit(self.X_train,self.y_train)
         model={'model':rf_model,'name':'Random Forest Tree-Classifier','params':rf_params}
@@ -327,10 +317,7 @@ class PurchasePredict(DataPreprocessor):
 		#predict over test
         y_prod_pred=best_prod_model.predict(self.X_test)
 		
-		
         return y_prod_pred
-
-
 
 ```
 
